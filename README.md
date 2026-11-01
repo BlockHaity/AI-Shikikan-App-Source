@@ -31,7 +31,7 @@ ai-shikikan-gui  →  ai-shikikan-core  →  ai-shikikan-worker
 | 位置 | 写死值 | 说明 |
 |---|---|---|
 | 本仓库 `.github/workflows/build-source.yml` | `MAIN_REPO: BlockHaity/AI-Shikikan` | 消费的主仓库 |
-| 主仓库 `.github/workflows/release.yml` | `SOURCE_REPOSITORY: BlockHaity/AI-Shikikan-Source` | 发布后触发的软件源仓库 |
+| 主仓库 `.github/workflows/release.yml` | `SOURCE_REPOSITORY: BlockHaity/AI-Shikikan-App-Source` | 发布后触发的软件源仓库 |
 
 更换仓库时改对应文件中的这一行即可。
 
@@ -39,7 +39,7 @@ ai-shikikan-gui  →  ai-shikikan-core  →  ai-shikikan-worker
 
 ### 配置步骤
 
-1. 把本目录推送到公开仓库 `BlockHaity/AI-Shikikan-Source`（本地 Gitea 远端为 `http://192.168.1.5:3000/develop/AI-Shikikan-Source.git`）。
+1. 把本目录推送到公开仓库 `BlockHaity/AI-Shikikan-App-Source`（本地 Gitea 远端为 `http://192.168.1.5:3000/develop/AI-Shikikan-Source.git`）。
 2. 本仓库 Settings → Pages → Source 选择 `gh-pages` 分支。
 3. 主仓库 Settings → Secrets and variables → Actions 新建 Secret：
    - `SOURCE_REPO_TOKEN`：有本仓库 `contents: write` 权限的 Personal Access Token（Fine-grained 或 classic `public_repo` 均可）。
@@ -59,14 +59,14 @@ VERSION=1.0.0-vibe INDEX=downloads/index.json APP_DIR=app/linux-x64 \
   RID=linux-x64 OUT_DIR=dist ./scripts/package-modules.sh
 
 # 4) 生成软件源元数据与一键安装脚本（需要 dpkg-dev / createrepo-c / docker）
-DIST=dist PUBLIC=public PAGES_URL=https://blockhaity.github.io/ai-shikikan-source \
+DIST=dist PUBLIC=public PAGES_URL=https://blockhaity.github.io/ai-shikikan-app-source \
   ./scripts/build-repo.sh
 ```
 
 ## 一键添加
 
 ```bash
-curl -fsSL https://blockhaity.github.io/ai-shikikan-source/install.sh | sudo bash
+curl -fsSL https://blockhaity.github.io/ai-shikikan-app-source/install.sh | sudo bash
 ```
 
 脚本会自动识别 apt / dnf / pacman，添加软件源并安装 `ai-shikikan-gui`（与 `install.sh` 同目录生成的 `index.html` 也提供手动命令）。
@@ -74,10 +74,10 @@ curl -fsSL https://blockhaity.github.io/ai-shikikan-source/install.sh | sudo bas
 ## 软件源地址
 
 ```
-apt:    deb [trusted=yes] https://blockhaity.github.io/ai-shikikan-source/ stable main
-rpm:    https://blockhaity.github.io/ai-shikikan-source/rpm/$basearch
-pacman: Server = https://blockhaity.github.io/ai-shikikan-source/pacman/$arch
+apt:    deb [trusted=yes] https://blockhaity.github.io/ai-shikikan-app-source/ stable main
+rpm:    https://blockhaity.github.io/ai-shikikan-app-source/rpm/$basearch
+pacman: Server = https://blockhaity.github.io/ai-shikikan-app-source/pacman/$arch
 ```
 
-> Pages 地址中的 owner 与仓库名均为小写（`blockhaity` / `ai-shikikan-source`），构建时由工作流自动转小写。
+> Pages 地址中的 owner 与仓库名均为小写（`blockhaity` / `ai-shikikan-app-source`），构建时由工作流自动转小写。
 > 仓库未做 GPG 签名，apt 客户端需加 `[trusted=yes]`，rpm/pacman 已关闭校验。
