@@ -6,8 +6,9 @@ set -euo pipefail
 #   ai-shikikan-core    依赖 worker: AIShikikan.Core.dll
 #   ai-shikikan-gui     依赖 core: GUI 主体 + 桌面入口
 #
-# 之所以只用 dotnet 变体: AOT / selfcontained 会把 Core 静态链接进可执行文件,
-# 没有可独立拆分的 Core.dll, 拆包只会得到空包。
+# 之所以只用 dotnet 变体: AOT 会把 Core 静态链接进可执行文件, 没有可独立
+# 拆分的 Core.dll, 拆包只会得到空包; Linux 归档也不再提供 selfcontained 变体,
+# 运行时统一由系统包依赖 (dotnet-runtime) 提供。
 #
 # 环境变量:
 #   VERSION     必填, 如 1.0.0-vibe
@@ -116,6 +117,8 @@ stage_tree() {
 # ---------- 运行时依赖 ----------
 DEB_X11="libx11-6, libxcursor1, libxrandr2, libxrender1, libxext6, libxfixes3, libxi6, libice6, libsm6, libxkbcommon0, libgl1, libglib2.0-0t64 | libglib2.0-0, libfontconfig1, libfreetype6"
 DEB_ICU="libicu78 | libicu76 | libicu75 | libicu74 | libicu73 | libicu72 | libicu71 | libicu70 | libicu69 | libicu68 | libicu67 | libicu66"
+# .NET 运行时包名: Linux 归档不带运行时, 由包管理器按这里的名称安装。
+# 升级 .NET 大版本时同步修改这三处 (Debian/RHEL 用版本化包名, Arch 用元包)。
 DEB_RUNTIME="dotnet-runtime-10.0"
 
 RPM_X11="libX11, libXcursor, libXrandr, libXrender, libXext, libXfixes, libXi, libICE, libSM, libxkbcommon, mesa-libGL, glib2, fontconfig, freetype"
@@ -232,9 +235,6 @@ build_pacman() {
         for d in "${depends[@]}"; do
             [ -n "$d" ] && echo "depend = $d"
         done
-        if [ "$module" != "gui" ]; then
-            echo "optdepend = $PAC_RUNTIME: 框架依赖变体需要系统 .NET 10 运行时"
-        fi
     } > "$tree/.PKGINFO"
 
     tar --zstd -cf "$OUT_ABS/${name}-${PVER}-1-${PKG_ARCH}.pkg.tar.zst" \
@@ -262,17 +262,18 @@ install -Dm644 "$WORK_TMP/$PKG.png" "$TREE_GUI/usr/share/icons/hicolor/256x256/a
 for format in $FORMATS; do
     case "$format" in
         deb)
-            build_deb worker "$TREE_WORKER" "" "$DEB_RUNTIME"
+            # 运行时依赖挂在基础包 worker 上, gui → core → worker 的链式依赖即可覆盖
+            build_deb worker "$TREE_WORKER" "$DEB_RUNTIME" ""
             build_deb core   "$TREE_CORE"   "$PKG-worker (= $DEB_VER)" ""
-            build_deb gui    "$TREE_GUI"    "$PKG-core (= $DEB_VER), $DEB_X11" "$DEB_RUNTIME, $DEB_ICU"
+            build_deb gui    "$TREE_GUI"    "$PKG-core (= $DEB_VER), $DEB_X11" "$DEB_ICU"
             ;;
         rpm)
-            build_rpm worker "$TREE_WORKER" "" "$RPM_RUNTIME"
+            build_rpm worker "$TREE_WORKER" "$RPM_RUNTIME" ""
             build_rpm core   "$TREE_CORE"   "$PKG-worker = $PVER" ""
-            build_rpm gui    "$TREE_GUI"    "$PKG-core = $PVER, $RPM_X11" "$RPM_RUNTIME, $RPM_ICU"
+            build_rpm gui    "$TREE_GUI"    "$PKG-core = $PVER, $RPM_X11" "$RPM_ICU"
             ;;
         pacman)
-            build_pacman worker "$TREE_WORKER"
+            build_pacman worker "$TREE_WORKER" "$PAC_RUNTIME"
             build_pacman core   "$TREE_CORE"   "$PKG-worker"
             build_pacman gui    "$TREE_GUI"    "$PKG-core" "${PAC_X11[@]}" "$PAC_ICU"
             ;;

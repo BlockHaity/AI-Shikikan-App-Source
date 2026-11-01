@@ -71,6 +71,8 @@ curl -fsSL https://blockhaity.github.io/ai-shikikan-app-source/install.sh | sudo
 
 脚本会自动识别 apt / dnf / pacman，添加软件源并安装 `ai-shikikan-gui`（与 `install.sh` 同目录生成的 `index.html` 也提供手动命令）。
 
+安装包基于主仓库的 `dotnet`（框架依赖）变体拆分，不自带运行时：`ai-shikikan-worker` 声明 `dotnet-runtime-10.0`（Arch 为 `dotnet-runtime`）依赖，`ai-shikikan-core` → `ai-shikikan-worker`、`ai-shikikan-gui` → `ai-shikikan-core` 逐级依赖。
+
 ## 软件源地址
 
 ```
