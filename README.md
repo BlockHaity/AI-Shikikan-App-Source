@@ -58,17 +58,26 @@ mkdir -p app/linux-x64 && tar xzf downloads/AIShikikan-*-linux-x64-dotnet.tar.gz
 VERSION=1.0.0-vibe INDEX=downloads/index.json APP_DIR=app/linux-x64 \
   RID=linux-x64 OUT_DIR=dist ./scripts/package-modules.sh
 
-# 4) 生成软件源元数据（需要 dpkg-dev / createrepo-c / docker）
-DIST=dist PUBLIC=public PAGES_URL=https://example.github.io/app-source \
+# 4) 生成软件源元数据与一键安装脚本（需要 dpkg-dev / createrepo-c / docker）
+DIST=dist PUBLIC=public PAGES_URL=https://blockhaity.github.io/ai-shikikan-source \
   ./scripts/build-repo.sh
 ```
+
+## 一键添加
+
+```bash
+curl -fsSL https://blockhaity.github.io/ai-shikikan-source/install.sh | sudo bash
+```
+
+脚本会自动识别 apt / dnf / pacman，添加软件源并安装 `ai-shikikan-gui`（与 `install.sh` 同目录生成的 `index.html` 也提供手动命令）。
 
 ## 软件源地址
 
 ```
-apt:    deb [trusted=yes] https://<owner>.github.io/<repo>/ stable main
-rpm:    https://<owner>.github.io/<repo>/rpm/$basearch
-pacman: Server = https://<owner>.github.io/<repo>/pacman/$arch
+apt:    deb [trusted=yes] https://blockhaity.github.io/ai-shikikan-source/ stable main
+rpm:    https://blockhaity.github.io/ai-shikikan-source/rpm/$basearch
+pacman: Server = https://blockhaity.github.io/ai-shikikan-source/pacman/$arch
 ```
 
+> Pages 地址中的 owner 与仓库名均为小写（`blockhaity` / `ai-shikikan-source`），构建时由工作流自动转小写。
 > 仓库未做 GPG 签名，apt 客户端需加 `[trusted=yes]`，rpm/pacman 已关闭校验。

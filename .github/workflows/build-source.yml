@@ -109,9 +109,11 @@ jobs:
       - name: Build repository metadata
         run: |
           set -euo pipefail
+          # GitHub Pages 地址中的 owner 与仓库名均为小写
           OWNER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
-          REPO="${GITHUB_REPOSITORY#*/}"
+          REPO="$(echo "${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]')"
           PAGES_URL="https://${OWNER}.github.io/${REPO}"
+          echo "PAGES_URL=$PAGES_URL" >> "$GITHUB_ENV"
           VERSION="${{ steps.resolve.outputs.version }}" \
           DIST="dist" PUBLIC="public" PAGES_URL="$PAGES_URL" \
           ./scripts/build-repo.sh
@@ -142,15 +144,21 @@ jobs:
             echo "- Main repository: \`${{ steps.resolve.outputs.main_repo }}\`"
             echo "- Deployed branch: \`gh-pages\`"
             echo ""
+            echo "### 一键添加"
+            echo ""
+            echo '```'
+            echo "curl -fsSL ${PAGES_URL}/install.sh | sudo bash"
+            echo '```'
+            echo ""
             echo "### apt"
             echo ""
             echo '```'
-            echo "deb [trusted=yes] https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/ stable main"
+            echo "deb [trusted=yes] ${PAGES_URL}/ stable main"
             echo '```'
             echo ""
             echo "### pacman"
             echo ""
             echo '```'
-            echo "Server = https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/pacman/\$arch"
+            echo "Server = ${PAGES_URL}/pacman/\$arch"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

@@ -151,6 +151,56 @@ for arch in x86_64 aarch64; do
     ok "pacman: pacman/$arch/ai-shikikan.db.tar.gz"
 done
 
+# ---------- 一键安装脚本 ----------
+[ -n "$PAGES_URL" ] || die "PAGES_URL 未设置, 无法生成一键安装脚本"
+cat > "$PUBLIC/install.sh" <<'INSTALL'
+#!/usr/bin/env bash
+set -euo pipefail
+
+# AI-Shikikan 软件源一键安装脚本 (自动识别 apt / dnf / pacman)
+# 用法: curl -fsSL __PAGES_URL__/install.sh | sudo bash
+
+PAGES_URL="__PAGES_URL__"
+PKG="ai-shikikan-gui"
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "请以 root 运行: curl -fsSL ${PAGES_URL}/install.sh | sudo bash" >&2
+    exit 1
+fi
+
+if command -v apt-get >/dev/null 2>&1; then
+    echo "== Debian / Ubuntu =="
+    echo "deb [trusted=yes] ${PAGES_URL}/ stable main" > /etc/apt/sources.list.d/ai-shikikan.list
+    apt-get update
+    apt-get install -y "$PKG"
+elif command -v dnf >/dev/null 2>&1; then
+    echo "== Fedora / RHEL =="
+    cat > /etc/yum.repos.d/ai-shikikan.repo <<REPOEOF
+[ai-shikikan]
+name=AI-Shikikan
+baseurl=${PAGES_URL}/rpm/\$basearch
+enabled=1
+gpgcheck=0
+REPOEOF
+    dnf install -y "$PKG"
+elif command -v pacman >/dev/null 2>&1; then
+    echo "== Arch Linux / Manjaro =="
+    arch="$(uname -m)"
+    if ! grep -q '^\[ai-shikikan\]' /etc/pacman.conf; then
+        printf '\n[ai-shikikan]\nServer = %s/pacman/%s\n' "$PAGES_URL" "$arch" >> /etc/pacman.conf
+    fi
+    pacman -Sy --noconfirm "$PKG"
+else
+    echo "未识别的包管理器, 请手动添加仓库 (见 ${PAGES_URL}/)" >&2
+    exit 1
+fi
+
+echo "安装完成: $PKG"
+INSTALL
+sed -i "s|__PAGES_URL__|${PAGES_URL}|g" "$PUBLIC/install.sh"
+chmod +x "$PUBLIC/install.sh"
+ok "install.sh"
+
 # ---------- 首页 ----------
 cat > "$PUBLIC/index.html" <<EOF
 <!doctype html>
@@ -160,6 +210,9 @@ cat > "$PUBLIC/index.html" <<EOF
 <style>body{font:15px/1.6 system-ui,sans-serif;max-width:760px;margin:40px auto;padding:0 16px}code,pre{background:#f2f2f2;border-radius:6px}pre{padding:12px;overflow:auto}</style>
 <h1>AI-Shikikan 软件源</h1>
 <p>当前版本: <code>${VERSION}</code></p>
+<h2>一键添加并安装</h2>
+<pre>curl -fsSL ${PAGES_URL}/install.sh | sudo bash</pre>
+<p>自动识别 apt / dnf / pacman, 添加软件源后安装 <code>ai-shikikan-gui</code>。</p>
 <h2>Debian / Ubuntu</h2>
 <pre>echo "deb [trusted=yes] ${PAGES_URL}/ stable main" | sudo tee /etc/apt/sources.list.d/ai-shikikan.list
 sudo apt update
