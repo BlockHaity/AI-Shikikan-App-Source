@@ -1,0 +1,23 @@
+name: Software Source
+
+# 触发入口: 只负责解析触发事件并调用可复用的 build-source.yml。
+# 实际构建逻辑全部在 build-source.yml (on: workflow_call) 中。
+
+on:
+  repository_dispatch:
+    types: [release]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '要重建的版本号 (留空则取主仓库最新 Release)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-source.yml
+    with:
+      version: ${{ github.event.client_payload.version || inputs.version || '' }}

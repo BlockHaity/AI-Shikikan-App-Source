@@ -1,0 +1,156 @@
+name: Build Software Source
+
+# 可复用的软件源构建工作流 (workflow_call)。
+# 由 source.yml 在 repository_dispatch / workflow_dispatch 时调用;
+# 也可被本仓库其他工作流通过 uses: ./.github/workflows/build-source.yml 复用。
+#
+# 消费主仓库公开 Release 的 index.json 与 Linux dotnet 归档,
+# 按模块拆出 deb / rpm / pacman 包, 生成仓库元数据并发布到 gh-pages。
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: '要重建的版本号 (留空则取主仓库最新 Release)'
+        required: false
+        type: string
+        default: ''
+    outputs:
+      version:
+        description: '实际构建的版本号'
+        value: ${{ jobs.build.outputs.version }}
+
+permissions:
+  contents: write
+
+env:
+  # 主仓库地址写死, 如需更换直接改这一行
+  MAIN_REPO: BlockHaity/AI-Shikikan
+
+jobs:
+  build:
+    name: Build packages and repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # 主仓库是公开仓库, 版本与资产均可免鉴权读取, 无需跨仓库令牌。
+      - name: Resolve version
+        id: resolve
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          VERSION="${INPUT_VERSION:-}"
+          if [ -z "$VERSION" ]; then
+            TAG="$(curl -fsSL --retry 3 \
+              "https://api.github.com/repos/${MAIN_REPO}/releases/latest" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])')"
+            VERSION="${TAG#v}"
+          fi
+          [ -n "$VERSION" ] || { echo "::error::无法确定版本号"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "main_repo=$MAIN_REPO" >> "$GITHUB_OUTPUT"
+          echo "主仓库: $MAIN_REPO, 版本: $VERSION"
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev rpm createrepo-c imagemagick zstd
+
+      - name: Download release assets
+        run: |
+          set -euo pipefail
+          mkdir -p downloads
+          curl -fsSL --retry 3 \
+            "https://api.github.com/repos/${MAIN_REPO}/releases/tags/v${{ steps.resolve.outputs.version }}" \
+            -o release.json
+          python3 - <<'PY' > assets.txt
+          import json
+          release = json.load(open("release.json", encoding="utf-8"))
+          for asset in release["assets"]:
+              name = asset["name"]
+              if name == "index.json" or (
+                  name.startswith("AIShikikan-")
+                  and name.endswith("-dotnet.tar.gz")
+                  and "-linux-" in name
+              ):
+                  print(asset["browser_download_url"], name)
+          PY
+          [ -s assets.txt ] || { echo "::error::Release 中没有索引或 Linux dotnet 归档"; exit 1; }
+          while read -r url name; do
+            curl -fsSL --retry 3 -o "downloads/$name" "$url"
+          done < assets.txt
+          ls -lh downloads
+
+      - name: Build module packages
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.resolve.outputs.version }}"
+          for rid in linux-x64 linux-arm64; do
+            archive="$(ls downloads/AIShikikan-*-${rid}-dotnet.tar.gz)"
+            mkdir -p "app/$rid"
+            tar xzf "$archive" -C "app/$rid"
+            echo "== $rid: $(basename "$archive") =="
+            VERSION="$VERSION" \
+            INDEX="downloads/index.json" \
+            APP_DIR="app/$rid" \
+            RID="$rid" \
+            OUT_DIR="dist" \
+            ./scripts/package-modules.sh
+          done
+          ls -lh dist
+
+      - name: Build repository metadata
+        run: |
+          set -euo pipefail
+          OWNER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          REPO="${GITHUB_REPOSITORY#*/}"
+          PAGES_URL="https://${OWNER}.github.io/${REPO}"
+          VERSION="${{ steps.resolve.outputs.version }}" \
+          DIST="dist" PUBLIC="public" PAGES_URL="$PAGES_URL" \
+          ./scripts/build-repo.sh
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          publish_branch: gh-pages
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com
+          commit_message: "chore(repo): publish v${{ steps.resolve.outputs.version }}"
+
+      - name: Upload packages artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: packages-${{ steps.resolve.outputs.version }}
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Write summary
+        run: |
+          {
+            echo "## Software source"
+            echo ""
+            echo "- Version: \`${{ steps.resolve.outputs.version }}\`"
+            echo "- Main repository: \`${{ steps.resolve.outputs.main_repo }}\`"
+            echo "- Deployed branch: \`gh-pages\`"
+            echo ""
+            echo "### apt"
+            echo ""
+            echo '```'
+            echo "deb [trusted=yes] https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/ stable main"
+            echo '```'
+            echo ""
+            echo "### pacman"
+            echo ""
+            echo '```'
+            echo "Server = https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/pacman/\$arch"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

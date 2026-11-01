@@ -1,0 +1,5 @@
+# CI 产物与临时目录, 不入库
+/app/
+/downloads/
+/dist/
+/public/
